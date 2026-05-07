@@ -1,1 +1,495 @@
 # puch3131.github.io
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ผลการตรวจสอบและประเมิน ชป.นทท. ร.4พัน.1</title>
+    <!-- โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- โหลด React และ ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- โหลด Babel สำหรับแปลง JSX ในเบราว์เซอร์ -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // ข้อมูลเริ่มต้นจำลองจากไฟล์ CSV
+        const initialCSV = `ชป.นทท. ร.4พัน.1 ปี 69,,,,,,,,
+ผลการทดสอบร่างกาย ครั้งที่ 1 ( 30 เม.ย.69 ),,,,,,,,
+ลำดับ,ยศ ชื่อ สกุล,,,อายุ,ดึงข้อ(ครั้ง),ดันพื้นกางแขน(ครั้ง),ท่ากระดานคว่ำ(นาที),วิ่ง 2 กิโลเมตร(นาที)
+1,ร.ท.,ชิติพล,มาศรี,25,13,44,3.35,8.01
+2,ร.ต.,กรวิชญ์,ตรีเจริญ,,-,-,-,-
+3,ส.ท.,ปิยะวัฒน์,รังษี,26,7,40,3,9.1
+4,ส.อ.,ทินภัทร,พลายงาม,22,16,51,3.5,8.44
+5,ส.อ.,อัษคชา,ก๋าแก่น,28,13,54,3.4,8.35
+6,ส.อ.,สุวรรณชัย,ทับทองดี,29,9,30,2,8.46
+7,จ.ส.อ.,ราชันย์,ทับทาบ,34,2,30,2,18.45
+8,ส.อ.,พงค์วัฒน์,ปักษี,28,10,40,2.1,8.52
+9,ส.ท.,จันทวุฒิ,อายี,25,15,50,3.5,7.45
+10,ส.อ.,ธีรัตม์,แห่วขัด,29,14,61,3.3,8.1
+11,ส.ต.,จักรกฤษณ์,แก้วสระแสง,26,15,52,3.4,8.45
+12,ส.ท.,สุรนาท,ดวงแก้ว,24,4,37,2.37,11.42
+13,ส.ต.,คงศักดิ์,บรรลือก้อง,24,20,72,4,7.19
+14,ส.ท.,ไชยวัฒน์,อ่อนมธุรส,26,15,45,4,7.24`;
+
+        // เกณฑ์การประเมินจากไฟล์ เกณฑ์ทดสอบร่างกาย.xlsx
+        const testCriteria = {
+          pullups: [
+            { min: 17, max: 21, p70: 14, p100: 20 },
+            { min: 22, max: 26, p70: 13, p100: 19 },
+            { min: 27, max: 31, p70: 12, p100: 18 },
+            { min: 32, max: 36, p70: 10, p100: 16 },
+          ],
+          pushups: [
+            { min: 17, max: 21, p70: 30, p100: 60 },
+            { min: 22, max: 26, p70: 30, p100: 60 },
+            { min: 27, max: 31, p70: 29, p100: 59 },
+            { min: 32, max: 36, p70: 27, p100: 57 },
+          ],
+          plank: [
+            { min: 17, max: 21, p70: 2.02, p100: 3.40 },
+            { min: 22, max: 26, p70: 2.00, p100: 3.35 },
+            { min: 27, max: 31, p70: 1.55, p100: 3.30 },
+            { min: 32, max: 36, p70: 1.50, p100: 3.25 },
+          ],
+          run: [
+            { min: 17, max: 21, p70: 9.20, p100: 6.50 },
+            { min: 22, max: 26, p70: 9.45, p100: 7.15 },
+            { min: 27, max: 31, p70: 10.15, p100: 7.45 },
+            { min: 32, max: 36, p70: 10.45, p100: 8.15 },
+          ]
+        };
+
+        // สีที่ใช้แสดงสถานะ (ปรับโทนให้เข้ากับพื้นหลังใหม่)
+        const statusColors = {
+          excellent: { bg: 'bg-[#40B573]', light: 'bg-[#E3F4E9]', text: 'text-[#1E5C38]' }, // 100% เขียวตุ่น
+          pass: { bg: 'bg-[#E2B93B]', light: 'bg-[#FDF4D6]', text: 'text-[#7D6319]' },       // 70% ทอง/เหลือง
+          fail: { bg: 'bg-[#D9534F]', light: 'bg-[#FAEBEB]', text: 'text-[#8A2B29]' },       // ไม่ผ่าน แดงตุ่น
+          none: { bg: 'bg-[#D1D1D1]', light: 'bg-[#F2F2F2]', text: 'text-[#707070]' }        // ไม่มีข้อมูล
+        };
+
+        function App() {
+          const [csvData, setCsvData] = useState(initialCSV);
+          const [activeTab, setActiveTab] = useState('dashboard');
+          const [searchTerm, setSearchTerm] = useState('');
+
+          // แปลงเวลา mm.ss ให้เป็นวินาที เพื่อใช้คำนวณคะแนนได้แม่นยำ
+          const toSecs = (val) => {
+            const str = parseFloat(val).toFixed(2);
+            const parts = str.split('.');
+            const m = parseInt(parts[0]) || 0;
+            const s = parseInt(parts[1]) || 0;
+            return (m * 60) + s;
+          };
+
+          // ฟังก์ชันคำนวณสถานะและให้คะแนน 0-100
+          const evaluateScore = (val, ageStr, type) => {
+            if (val === null || val === undefined || val === 0 || !ageStr || ageStr === '-') {
+              return { val: 0, status: 'none', label: '-', target: '', score: 0 };
+            }
+            
+            const age = parseInt(ageStr, 10);
+            if (isNaN(age)) return { val, status: 'none', label: 'อายุไม่ระบุ', target: '', score: 0 };
+
+            const criteriaList = testCriteria[type];
+            const crit = criteriaList.find(c => age >= c.min && age <= c.max);
+            
+            if (!crit) return { val, status: 'none', label: 'ไม่มีเกณฑ์อายุ', target: '', score: 0 };
+
+            let isPass100 = false;
+            let isPass70 = false;
+            let score = 0;
+
+            const calculateTimeScore = (val, p100, p70, isLowerBetter) => {
+              const valSec = toSecs(val);
+              const p100Sec = toSecs(p100);
+              const p70Sec = toSecs(p70);
+              
+              if (isLowerBetter) {
+                if (valSec <= p100Sec) return 100;
+                if (valSec <= p70Sec) return 70 + 30 * ((p70Sec - valSec) / (p70Sec - p100Sec));
+                return (p70Sec / valSec) * 70; // ลดคะแนนตามสัดส่วน
+              } else {
+                if (valSec >= p100Sec) return 100;
+                if (valSec >= p70Sec) return 70 + 30 * ((valSec - p70Sec) / (p100Sec - p70Sec));
+                return (valSec / p70Sec) * 70;
+              }
+            };
+
+            if (type === 'run') {
+              isPass100 = val <= crit.p100;
+              isPass70 = val <= crit.p70;
+              score = calculateTimeScore(val, crit.p100, crit.p70, true);
+            } else if (type === 'plank') {
+              isPass100 = val >= crit.p100;
+              isPass70 = val >= crit.p70;
+              score = calculateTimeScore(val, crit.p100, crit.p70, false);
+            } else {
+              isPass100 = val >= crit.p100;
+              isPass70 = val >= crit.p70;
+              if (isPass100) score = 100;
+              else if (isPass70) score = 70 + 30 * ((val - crit.p70) / (crit.p100 - crit.p70));
+              else score = (val / crit.p70) * 70;
+            }
+
+            // ควบคุมคะแนนให้อยู่ในช่วง 0-100
+            score = Math.round(Math.min(100, Math.max(0, score)));
+
+            const targetStr = `(เป้า 70%: ${crit.p70}, 100%: ${crit.p100})`;
+
+            if (isPass100) return { val, status: 'excellent', label: '100%', target: targetStr, score };
+            if (isPass70) return { val, status: 'pass', label: '70%', target: targetStr, score };
+            return { val, status: 'fail', label: 'ไม่ผ่าน', target: targetStr, score };
+          };
+
+          // ฟังก์ชันแปลง CSV เป็น Object
+          const parsedData = useMemo(() => {
+            try {
+              const lines = csvData.trim().split('\n');
+              const dataLines = lines.slice(3); // ข้าม 3 บรรทัดแรก
+              
+              return dataLines.map((line, index) => {
+                const parts = line.split(',');
+                if (parts.length < 9) return null;
+                
+                let fullName = '';
+                let ageStr = '-';
+                let scores = [];
+
+                if (parts[1] && parts[1].includes(' ')) {
+                   fullName = parts[1].trim();
+                   ageStr = parts[4] ? parts[4].trim() : '-';
+                   scores = parts.slice(5, 9);
+                } else {
+                   const rank = parts[1] ? parts[1].trim() : '';
+                   const fname = parts[2] ? parts[2].trim() : '';
+                   const lname = parts[3] ? parts[3].trim() : '';
+                   fullName = `${rank}${fname} ${lname}`.trim();
+                   ageStr = parts[4] ? parts[4].trim() : '-';
+                   scores = parts.slice(5, 9);
+                }
+
+                if (!fullName) return null;
+
+                const parseNum = (valStr) => {
+                  if (!valStr || valStr.trim() === '-') return null;
+                  const num = parseFloat(valStr);
+                  return isNaN(num) ? null : num;
+                };
+
+                const pullupsRaw = parseNum(scores[0]);
+                const pushupsRaw = parseNum(scores[1]);
+                const plankRaw = parseNum(scores[2]);
+                const runRaw = parseNum(scores[3]);
+
+                const hasData = pullupsRaw !== null;
+
+                return {
+                  id: parts[0] || index + 1,
+                  name: fullName,
+                  age: ageStr,
+                  hasData,
+                  pullups: evaluateScore(pullupsRaw, ageStr, 'pullups'),
+                  pushups: evaluateScore(pushupsRaw, ageStr, 'pushups'),
+                  plank: evaluateScore(plankRaw, ageStr, 'plank'),
+                  run: evaluateScore(runRaw, ageStr, 'run'),
+                };
+              }).filter(Boolean);
+            } catch (e) {
+              console.error("Error parsing CSV", e);
+              return [];
+            }
+          }, [csvData]);
+
+          const validData = useMemo(() => parsedData.filter(d => d.hasData), [parsedData]);
+
+          const stats = useMemo(() => {
+            if (validData.length === 0) return { 
+              pullups: { score: 0, pass: 0, rawAvg: 0 }, 
+              pushups: { score: 0, pass: 0, rawAvg: 0 }, 
+              plank: { score: 0, pass: 0, rawAvg: 0 }, 
+              run: { score: 0, pass: 0, rawAvg: 0 }, 
+              totalCount: 0 
+            };
+
+            const countPass = (type) => validData.filter(d => d[type].status === 'excellent' || d[type].status === 'pass').length;
+            const avgScore = (type) => (validData.reduce((sum, d) => sum + d[type].score, 0) / validData.length).toFixed(1);
+            const rawAvg = (type) => {
+              const validVals = validData.map(d => parseFloat(d[type].val) || 0);
+              return (validVals.reduce((a, b) => a + b, 0) / validData.length).toFixed(type === 'plank' || type === 'run' ? 2 : 1);
+            };
+
+            return {
+              pullups: { score: avgScore('pullups'), pass: countPass('pullups'), rawAvg: rawAvg('pullups') },
+              pushups: { score: avgScore('pushups'), pass: countPass('pushups'), rawAvg: rawAvg('pushups') },
+              plank: { score: avgScore('plank'), pass: countPass('plank'), rawAvg: rawAvg('plank') },
+              run: { score: avgScore('run'), pass: countPass('run'), rawAvg: rawAvg('run') },
+              totalCount: validData.length
+            };
+          }, [validData]);
+
+          const filteredTableData = useMemo(() => {
+            return parsedData.filter(person => 
+              person.name.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+          }, [parsedData, searchTerm]);
+
+          // กราฟที่แสดงสีตามสถานะการผ่านเกณฑ์
+          const CriteriaBarChart = ({ data, dataKey, unit, title, passCount, totalCount }) => {
+            const maxValue = Math.max(...data.map(d => d[dataKey].val), 1);
+            
+            return (
+              <div className="bg-[#F4F3EF] p-6 rounded-xl shadow-sm border border-[#E5E3DC] flex flex-col h-full">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                     <h3 className="text-lg font-bold text-[#4A4A4A]">{title}</h3>
+                     <div className="flex gap-3 mt-1 text-[11px] text-[#7A7A7A] font-medium">
+                       <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#40B573]"></div> ผ่าน 100%</span>
+                       <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#E2B93B]"></div> ผ่าน 70%</span>
+                       <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#D9534F]"></div> ไม่ผ่าน</span>
+                     </div>
+                  </div>
+                  <div className="text-sm bg-[#EAE8E3] px-4 py-1.5 rounded-full font-medium text-[#5A5A5A] shrink-0 border border-[#DCDAD4]">
+                    ผ่านเกณฑ์: <span className="font-bold text-[#3A3A3A]">{passCount}</span> / {totalCount} นาย
+                  </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+                  {data.map((item, i) => {
+                    const scoreData = item[dataKey];
+                    const width = Math.max((scoreData.val / maxValue) * 100, 2);
+                    const barColor = statusColors[scoreData.status].bg;
+                    
+                    return (
+                      <div key={i} className="flex flex-col group" title={scoreData.target}>
+                        <div className="flex justify-between text-xs mb-1.5 text-[#6A6A6A] font-medium">
+                          <span className="truncate pr-2">{item.name} <span className="text-[#9A9A9A] font-normal">อายุ {item.age}</span></span>
+                          <span className={statusColors[scoreData.status].text}>
+                            {scoreData.val > 0 ? scoreData.val : '-'} {unit}
+                          </span>
+                        </div>
+                        <div className="w-full bg-[#E5E3DC] rounded-full h-3 overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                            style={{ width: `${width}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          };
+
+          // คอมโพเนนต์แสดงคะแนนในตาราง
+          const ScoreCell = ({ data }) => {
+            if (data.status === 'none') {
+              return <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-[#EAE8E3] text-[#9A9A9A]">-</span>;
+            }
+            const colors = statusColors[data.status];
+            return (
+              <div className="flex flex-col items-center justify-center cursor-help" title={`คะแนน: ${data.score}/100\n${data.target}`}>
+                <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold shadow-sm ${colors.light} ${colors.text}`}>
+                  {data.val}
+                </span>
+                <span className={`text-[10px] mt-1 font-medium ${colors.text}`}>
+                  {data.label}
+                </span>
+              </div>
+            );
+          };
+
+          return (
+            <div className="min-h-screen bg-[#EAE8E3] text-[#3A3A3A] font-sans selection:bg-[#D4D2CD]">
+              <header className="bg-[#343633] text-white p-5 shadow-lg border-b-4 border-[#252724]">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                    {/* แทรกโลโก้แนวทหารแบบไอคอน (SVG) มุมซ้ายบน */}
+                    <div className="bg-[#252724] p-2.5 rounded-xl shadow-inner flex-shrink-0 border border-[#434641] flex items-center justify-center">
+                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-11 h-11 md:w-12 md:h-12 text-[#E2B93B] drop-shadow-md">
+                         <path fillRule="evenodd" d="M11.46 3.469a1.5 1.5 0 011.08 0l7.31 2.825A1.5 1.5 0 0121 7.7v5.6c0 4.195-2.733 8.014-6.666 9.61a3.75 3.75 0 01-3.168 0C7.233 21.314 4.5 17.495 4.5 13.3V7.7a1.5 1.5 0 01.98-1.406l7.31-2.825zM12 7.5a.75.75 0 00-.712.512l-1.042 3.208H6.985a.75.75 0 00-.44 1.349l2.641 1.918-1.009 3.106a.75.75 0 001.154.838L12 16.487l2.67 1.944a.75.75 0 001.154-.838l-1.01-3.106 2.642-1.918a.75.75 0 00-.44-1.35H13.76l-1.042-3.208A.75.75 0 0012 7.5z" clipRule="evenodd" />
+                       </svg>
+                    </div>
+                    <div>
+                      <h1 className="text-xl md:text-2xl font-bold tracking-wide text-[#F4F3EF] drop-shadow-sm">ผลการตรวจสอบและประเมิน ชป.นทท. ร.4พัน.1</h1>
+                      <p className="text-[#A2A59F] mt-0.5 text-sm font-medium">อัปเดตข้อมูลอัตโนมัติ พร้อมเปรียบเทียบเกณฑ์คะแนนตามอายุ</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-2 bg-[#252724] p-1.5 rounded-xl border border-[#434641] shadow-inner">
+                    <button 
+                      onClick={() => setActiveTab('dashboard')}
+                      className={`px-4 py-2 rounded-lg transition-all text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-[#F4F3EF] text-[#252724] shadow-md' : 'text-[#C5C7C3] hover:bg-[#434641] hover:text-white'}`}
+                    >
+                      ภาพรวม & กราฟ
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('data')}
+                      className={`px-4 py-2 rounded-lg transition-all text-sm font-semibold ${activeTab === 'data' ? 'bg-[#F4F3EF] text-[#252724] shadow-md' : 'text-[#C5C7C3] hover:bg-[#434641] hover:text-white'}`}
+                    >
+                      อัปเดตข้อมูล (CSV)
+                    </button>
+                  </div>
+                </div>
+              </header>
+
+              <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+                
+                {activeTab === 'dashboard' && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+                      {[
+                        { title: 'คะแนนประเมิน ดึงข้อ', data: stats.pullups, color: 'text-[#2C4B3B]', bg: 'bg-[#E3EBE6]', border: 'border-[#40B573]' },
+                        { title: 'คะแนนประเมิน ดันพื้น', data: stats.pushups, color: 'text-[#5C4A19]', bg: 'bg-[#F6F1E3]', border: 'border-[#E2B93B]' },
+                        { title: 'คะแนนประเมิน กระดานคว่ำ', data: stats.plank, color: 'text-[#4A3C4C]', bg: 'bg-[#EBE7EC]', border: 'border-[#8F7294]' },
+                        { title: 'คะแนนประเมิน วิ่ง 2 กม.', data: stats.run, color: 'text-[#5C2B29]', bg: 'bg-[#F6E6E5]', border: 'border-[#D9534F]' },
+                      ].map((stat, idx) => (
+                        <div key={idx} className={`bg-[#F4F3EF] rounded-2xl p-5 border-l-4 ${stat.border} shadow-sm flex flex-col justify-center relative group transition-all hover:shadow-md border-t border-r border-b border-t-[#FFFFFF] border-r-[#E5E3DC] border-b-[#E5E3DC]`}>
+                          <span className="text-[#6A6A6A] text-sm font-bold tracking-wide">{stat.title}</span>
+                          <div className="mt-1.5 flex items-baseline gap-1.5">
+                            <span className="text-3xl font-extrabold text-[#3A3A3A]">{stat.data.score}</span>
+                            <span className="text-sm font-bold text-[#A5A5A5]">/ 100</span>
+                          </div>
+                          <div className={`mt-3 inline-flex items-center w-max px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${stat.bg} ${stat.color}`}>
+                            ผ่านเกณฑ์ {stat.data.pass} / {stats.totalCount} นาย
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-[#F4F3EF] rounded-2xl shadow-sm border border-[#E5E3DC] overflow-hidden">
+                      <div className="p-6 border-b border-[#E5E3DC] flex flex-col md:flex-row justify-between items-center gap-4 bg-white/50">
+                        <h2 className="text-xl font-bold text-[#4A4A4A] flex items-center gap-2">
+                          1. คะแนนและการผ่านเกณฑ์แต่ละคน
+                        </h2>
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                           <div className="hidden md:flex gap-3 text-xs font-bold text-[#6A6A6A] bg-[#EAE8E3] p-2.5 rounded-xl border border-[#DCDAD4] shadow-inner">
+                             <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-[#40B573] shadow-sm"></div> ผ่าน 100%</span>
+                             <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-[#E2B93B] shadow-sm"></div> ผ่าน 70%</span>
+                             <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-[#D9534F] shadow-sm"></div> ไม่ผ่าน</span>
+                           </div>
+                          <input 
+                            type="text" 
+                            placeholder="ค้นหาชื่อ..." 
+                            className="px-4 py-2 border border-[#DCDAD4] bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8F918D] flex-1 md:w-56 shadow-inner text-sm font-medium"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-[#EAE8E3] text-[#6A6A6A] text-xs uppercase tracking-wider border-b-2 border-[#DCDAD4]">
+                              <th className="p-4 font-extrabold w-16 text-center">ลำดับ</th>
+                              <th className="p-4 font-extrabold">ยศ ชื่อ สกุล <span className="font-medium text-[#9A9A9A] lowercase tracking-normal">(อายุ)</span></th>
+                              <th className="p-4 font-extrabold text-center w-28">ดึงข้อ<br/><span className="text-[10px] font-medium text-[#9A9A9A] lowercase tracking-normal">(ครั้ง)</span></th>
+                              <th className="p-4 font-extrabold text-center w-28">ดันพื้น<br/><span className="text-[10px] font-medium text-[#9A9A9A] lowercase tracking-normal">(ครั้ง)</span></th>
+                              <th className="p-4 font-extrabold text-center w-28">กระดานคว่ำ<br/><span className="text-[10px] font-medium text-[#9A9A9A] lowercase tracking-normal">(นาที)</span></th>
+                              <th className="p-4 font-extrabold text-center w-28">วิ่ง 2 กม.<br/><span className="text-[10px] font-medium text-[#9A9A9A] lowercase tracking-normal">(นาที)</span></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#EAE8E3]">
+                            {filteredTableData.map((person, i) => (
+                              <tr key={i} className="hover:bg-[#FDFDFB] transition-colors group">
+                                <td className="p-4 text-[#8A8A8A] font-medium text-center">{person.id}</td>
+                                <td className="p-4 font-bold text-[#4A4A4A]">
+                                  {person.name} 
+                                  {person.age !== '-' && <span className="ml-2 text-[11px] text-[#8A8A8A] bg-[#EAE8E3] px-2 py-0.5 rounded-md font-medium border border-[#DCDAD4]">อายุ {person.age}</span>}
+                                </td>
+                                <td className="p-2 align-middle"><ScoreCell data={person.pullups} /></td>
+                                <td className="p-2 align-middle"><ScoreCell data={person.pushups} /></td>
+                                <td className="p-2 align-middle"><ScoreCell data={person.plank} /></td>
+                                <td className="p-2 align-middle"><ScoreCell data={person.run} /></td>
+                              </tr>
+                            ))}
+                            {filteredTableData.length === 0 && (
+                              <tr>
+                                <td colSpan="6" className="p-10 text-center text-[#8A8A8A] font-medium bg-[#F9F9F8]">ไม่พบข้อมูลที่ค้นหา</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 h-[520px]">
+                      <CriteriaBarChart 
+                        title="2. ท่าดึงข้อ (ภาพรวม)" 
+                        data={validData} 
+                        dataKey="pullups" 
+                        unit="ครั้ง" 
+                        passCount={stats.pullups.pass}
+                        totalCount={stats.totalCount}
+                      />
+                      <CriteriaBarChart 
+                        title="3. ท่าดันพื้นกางแขน (ภาพรวม)" 
+                        data={validData} 
+                        dataKey="pushups" 
+                        unit="ครั้ง" 
+                        passCount={stats.pushups.pass}
+                        totalCount={stats.totalCount}
+                      />
+                      <CriteriaBarChart 
+                        title="4. ท่ากระดานคว่ำ (ภาพรวม)" 
+                        data={validData} 
+                        dataKey="plank" 
+                        unit="นาที" 
+                        passCount={stats.plank.pass}
+                        totalCount={stats.totalCount}
+                      />
+                      <CriteriaBarChart 
+                        title="5. ท่าวิ่ง 2 กิโลเมตร (ภาพรวม)" 
+                        data={validData} 
+                        dataKey="run" 
+                        unit="นาที" 
+                        passCount={stats.run.pass}
+                        totalCount={stats.totalCount}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'data' && (
+                  <div className="bg-[#F4F3EF] rounded-2xl shadow-sm border border-[#E5E3DC] p-6 max-w-4xl mx-auto">
+                    <h2 className="text-xl font-bold text-[#4A4A4A] mb-4">อัปเดตข้อมูลจาก Excel/CSV</h2>
+                    <p className="text-[#6A6A6A] mb-4 text-sm font-medium">
+                      คัดลอกข้อมูลทั้งหมดจากไฟล์ Excel (รวมหัวตาราง 3 บรรทัดแรก) มาวางในช่องด้านล่างนี้ ระบบจะคำนวณและเทียบเกณฑ์อายุให้ใหม่ทันที
+                    </p>
+                    <textarea
+                      className="w-full h-96 p-5 border border-[#DCDAD4] bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8F918D] font-mono text-sm whitespace-pre shadow-inner text-[#4A4A4A]"
+                      value={csvData}
+                      onChange={(e) => setCsvData(e.target.value)}
+                      placeholder="วางข้อมูล CSV ที่นี่..."
+                    />
+                    <div className="mt-5 flex justify-between items-center">
+                      <span className="text-sm text-[#7A7A7A] font-medium bg-[#EAE8E3] px-4 py-2 rounded-lg border border-[#DCDAD4]">
+                        พบข้อมูล {parsedData.length} รายการ (มีผลคะแนน <span className="font-bold text-[#3A3A3A]">{validData.length}</span> รายการ)
+                      </span>
+                      <button 
+                        onClick={() => setActiveTab('dashboard')}
+                        className="bg-[#343633] hover:bg-[#252724] text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-md active:scale-95 border border-[#1A1A1A]"
+                      >
+                        ดู Dashboard
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </main>
+            </div>
+          );
+        }
+
+        // โค้ดสำหรับสั่งให้ React ทำงานในไฟล์ HTML
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
